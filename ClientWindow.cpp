@@ -414,9 +414,17 @@ void ClientWindow::onPublishMessageCompleted(int errCode, const std::string &top
         for (const string &topic : topics) {
             lwPublishedTopics->addItem(QString::fromStdString(topic));
         }
-        lblStatus->setText("Status: Publish Topic: " + QString::fromStdString(topic) + " with message: " + QString::fromStdString(data) + " -- OK!");
+        lblStatus->setText("Status: Publish Topic: "
+                           + QString::fromStdString(topic)
+                           + " with message: "
+                           + QString::fromStdString(data)
+                           + " -- OK!");
     } else {
-        lblStatus->setText("Status: Publish Topic: " + QString::fromStdString(topic) + " with message: " + QString::fromStdString(data) + " -- Failed!");
+        lblStatus->setText("Status: Publish Topic: "
+                           + QString::fromStdString(topic)
+                           + " with message: "
+                           + QString::fromStdString(data)
+                           + " -- Failed, errCode: " + QString::number(errCode));
     }
 }
 
@@ -430,9 +438,13 @@ void ClientWindow::onSubscribeTopicCompleted(int errCode, const std::string &top
         for (const string &topic : topics) {
             lwSubscribedTopics->addItem(QString::fromStdString(topic));
         }
-        lblStatus->setText("Status: Subscribe Topic: " + QString::fromStdString(topic) + " -- OK!");
+        lblStatus->setText("Status: Subscribe Topic: "
+                           + QString::fromStdString(topic)
+                           + " -- OK!");
     } else {
-        lblStatus->setText("Status: Subscribe Topic: " + QString::fromStdString(topic) + " -- Failed!");
+        lblStatus->setText("Status: Subscribe Topic: "
+                           + QString::fromStdString(topic)
+                           + " -- Failed, errCode: " + QString::number(errCode));
     }
 }
 
@@ -446,9 +458,13 @@ void ClientWindow::onUnsubscribeTopicCompleted(int errCode, const std::string &t
         for (const string &topic : topics) {
             lwSubscribedTopics->addItem(QString::fromStdString(topic));
         }
-        lblStatus->setText("Status: Unsubscribe Topic: " + QString::fromStdString(topic) + " -- OK!");
+        lblStatus->setText("Status: Unsubscribe Topic: "
+                           + QString::fromStdString(topic)
+                           + " -- OK!");
     } else {
-        lblStatus->setText("Status: Unsubscribe Topic: " + QString::fromStdString(topic) + " -- Failed!");
+        lblStatus->setText("Status: Unsubscribe Topic: "
+                           + QString::fromStdString(topic)
+                           + " -- Failed, errCode: " + QString::number(errCode));
     }
 }
 
@@ -457,8 +473,12 @@ void ClientWindow::onConnectCompleted(int errCode, const MQTTClient *self)
     bool success = errCode == 0;
     this->btnConnect->setEnabled(!success);
     this->btnDisconnect->setEnabled(success);
-    QString str = (success?"Connected!":"Connect Failure, errCode: ");
-    this->lblStatus->setText("Status: " + str + QString::number(errCode));
+    if (success) {
+        lblStatus->setText("Status: Connected!");
+    } else {
+        lblStatus->setText(QString("Status: Connect Failure, errCode: ") + QString::number(errCode));
+    }
+    
     btnSubscribe->setEnabled(success);
     btnPublish->setEnabled(success);
 }
@@ -468,8 +488,11 @@ void ClientWindow::onDisconnectCompleted(int errCode, const MQTTClient *self)
     bool success = errCode == 0;
     this->btnConnect->setEnabled(success);
     this->btnDisconnect->setEnabled(!success);
-    QString str = success?"Disconnected!":"Disconnect Failure, errCode: ";
-    this->lblStatus->setText("Status: " + str + QString::number(errCode));
+    if (success) {
+        lblStatus->setText("Status: Disconnected!");
+    } else {
+        lblStatus->setText(QString("Status: Disconnect Failure, errCode: ") + QString::number(errCode));
+    }
     btnSubscribe->setEnabled(!success);
     btnPublish->setEnabled(!success);
 }
@@ -483,7 +506,7 @@ void ClientWindow::onMessageReceived(const std::string &topic, const std::string
 }
 
 // the following methods are used for switching to UI thread by emitting signal jump2UISignal.
-// then the slot jump2UISlot will be running in UI thread. 
+// then the slot jump2UISlot will be running in UI thread.
 void ClientWindow::_onPublishMessageCompleted(int errCode, const std::string &topic, const std::string &data)
 {
     emit jump2UISignal((int)CallbackType::Publish, errCode, QString::fromStdString(topic), QString::fromStdString(data), nullptr);

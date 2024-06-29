@@ -189,7 +189,7 @@ void MainWindow::construct() {
     
     // server
     QGroupBox *gbServer = static_cast<QGroupBox *>(createServerBox());
-    mainLayout->addWidget(gbServer);
+    //mainLayout->addWidget(gbServer);
     
     // client
     QGroupBox *gbClient = static_cast<QGroupBox *>(createClientBox());

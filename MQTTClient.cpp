@@ -296,6 +296,8 @@ void onPubMessageSuccess(void* context, MQTTAsync_successData* response) {
     string message = bufferedMsgs[response->token].message;
     bufferedMsgs.erase(response->token);
     
+    MQTTAsync_free(response);
+    
     self->AddPubTopic(topic);
     
     if (self->onPublishMessageHandler != nullptr) {
@@ -310,6 +312,8 @@ void onPubMessageFailure(void* context, MQTTAsync_failureData* response) {
     string message = bufferedMsgs[response->token].message;
     bufferedMsgs.erase(response->token);
     
+    MQTTAsync_free(response);
+    
     if (self->onPublishMessageHandler != nullptr) {
         self->onPublishMessageHandler(response->code, topic, message);
     }
@@ -320,6 +324,8 @@ void onSubTopicSuccess(void* context, MQTTAsync_successData* response) {
     
     string topic = bufferedMsgs[response->token].topic;
     bufferedMsgs.erase(response->token);
+    
+    MQTTAsync_free(response);
     
     self->AddSubTopic(topic);
     
@@ -334,6 +340,8 @@ void onSubTopicFailure(void* context, MQTTAsync_failureData* response) {
     string topic = bufferedMsgs[response->token].topic;
     bufferedMsgs.erase(response->token);
     
+    MQTTAsync_free(response);
+    
     if (self->onSubscribeTopicHandler != nullptr) {
         self->onSubscribeTopicHandler(response->code, topic);
     }
@@ -344,6 +352,8 @@ void onUnsubTopicSuccess(void* context, MQTTAsync_successData* response) {
     
     string topic = bufferedMsgs[response->token].topic;
     bufferedMsgs.erase(response->token);
+    
+    MQTTAsync_free(response);
     
     self->RemoveSubTopic(topic);
     
@@ -358,12 +368,16 @@ void onUnsubTopicFailure(void* context, MQTTAsync_failureData* response) {
     string topic = bufferedMsgs[response->token].topic;
     bufferedMsgs.erase(response->token);
     
+    MQTTAsync_free(response);
+    
     if (self->onUnsubscribeTopicHandler != nullptr) {
         self->onUnsubscribeTopicHandler(response->code, topic);
     }
 }
 
 void onConnectSuccess(void* context, MQTTAsync_successData* response) {
+    MQTTAsync_free(response);
+    
     MQTTClient *self = static_cast<MQTTClient *>(context);
     if (self->onConnectHandler != nullptr) {
         self->onConnectHandler(0, self);
@@ -371,13 +385,18 @@ void onConnectSuccess(void* context, MQTTAsync_successData* response) {
 }
 
 void onConnectFailure(void* context,  MQTTAsync_failureData* response) {
+    int code = response->code;
+    MQTTAsync_free(response);
+    
     MQTTClient *self = static_cast<MQTTClient *>(context);
     if (self->onConnectHandler != nullptr) {
-        self->onConnectHandler(response->code, self);
+        self->onConnectHandler(code, self);
     }
 }
 
 void onDisconnectSuccess(void* context, MQTTAsync_successData* response) {
+    MQTTAsync_free(response);
+    
     _isUserInitDisconnectOnGoing = false;
     MQTTClient *self = static_cast<MQTTClient *>(context);
     if (self->onDisconnectHandler != nullptr) {
@@ -386,6 +405,9 @@ void onDisconnectSuccess(void* context, MQTTAsync_successData* response) {
 }
 
 void onDisconnectFailure(void* context,  MQTTAsync_failureData* response) {
+    int code = response->code;
+    MQTTAsync_free(response);
+    
     _isUserInitDisconnectOnGoing = false;
     MQTTClient *self = static_cast<MQTTClient *>(context);
     if (self->onDisconnectHandler != nullptr) {
@@ -394,9 +416,13 @@ void onDisconnectFailure(void* context,  MQTTAsync_failureData* response) {
 }
 
 int onMessageArrived(void *context, char *topicName, int topicLen, MQTTAsync_message *message) {
-    MQTTClient *self = static_cast<MQTTClient *>(context);
     string topic(topicName, topicLen);
     string msg(static_cast<const char *>(message->payload), message->payloadlen);
+    
+    MQTTAsync_free(topicName);
+    MQTTAsync_free(message);
+    
+    MQTTClient *self = static_cast<MQTTClient *>(context);
     if (self->onMessageReceivedHandler != nullptr) {
         self->onMessageReceivedHandler(topic, msg);
     }
@@ -406,6 +432,8 @@ void onDeliveryCompleted(void *context, MQTTAsync_token dt) {
 }
 
 void onConnectionLost(void* context, char* cause) {
+    MQTTAsync_free(cause);
+    
     MQTTClient *self = static_cast<MQTTClient *>(context);
     if (self->IsAutoReconnectEnabled()
         && !_isUserInitDisconnectOnGoing) {
