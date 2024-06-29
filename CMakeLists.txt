@@ -13,14 +13,14 @@ set(PROJECT_SOURCES
         mainwindow.h
 		MQTTLoginInfo.cpp
 		MQTTLoginInfo.hpp
-		MQTTClient.cpp
-		MQTTClient.hpp
+		client/MQTTClient.cpp
+		client/MQTTClient.hpp
         Utils.cpp
         Utils.hpp
-        ClientWindow.cpp
-        ClientWindow.hpp
-        ServerWindow.cpp
-        ServerWindow.hpp
+        client/ClientWindow.cpp
+        client/ClientWindow.hpp
+        server/ServerWindow.cpp
+        server/ServerWindow.hpp
 )
 
 link_directories(/usr/local/lib)

@@ -7,7 +7,7 @@
 
 #include "MQTTClient.hpp"
 #include "MQTTAsync.h"
-#include "MQTTLoginInfo.hpp"
+#include "../MQTTLoginInfo.hpp"
 #include <algorithm>
 #include <iostream>
 #include <unordered_map>
@@ -286,6 +286,7 @@ void MQTTClient::UnsubTopic(const std::string &topic) {
 
 int MQTTClient::Reconnect() {
     MQTTAsync_reconnect(static_cast<MQTTAsync>(_client));
+    return 0;
 }
 
 #pragma mark - internal Paho-MQTT-C callbacks
@@ -426,6 +427,8 @@ int onMessageArrived(void *context, char *topicName, int topicLen, MQTTAsync_mes
     if (self->onMessageReceivedHandler != nullptr) {
         self->onMessageReceivedHandler(topic, msg);
     }
+    
+    return 0;
 }
 
 void onDeliveryCompleted(void *context, MQTTAsync_token dt) {

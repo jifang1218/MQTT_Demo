@@ -14,8 +14,8 @@
 #include <QGridLayout>
 #include <QMessageBox>
 #include <QDebug>
-#include "ClientWindow.hpp"
-#include "ServerWindow.hpp"
+#include "client/ClientWindow.hpp"
+#include "server/ServerWindow.hpp"
 #include "MQTTLoginInfo.hpp"
 
 using namespace std;
