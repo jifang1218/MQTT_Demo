@@ -40,7 +40,7 @@ static void onDisconnectFailure(void* context,  MQTTAsync_failureData* response)
 //MessageReceivedCallback onMessageReceivedHandler;
 static int onMessageArrived(void *context, char *topicName, int topicLen, MQTTAsync_message *message);
 
-
+static bool _isUserInitDisconnectOnGoing = false;
 
 
 static void onDeliveryCompleted(void *context, MQTTAsync_token dt);
@@ -84,6 +84,7 @@ MQTTClient::~MQTTClient()
     MQTTAsync_destroy(&_client);
 }
 
+#pragma mark - Actions
 int MQTTClient::Connect() {
     MQTTAsync_connectOptions conn_opts = MQTTAsync_connectOptions_initializer;
     //    conn_opts.keepAliveInterval = 20;
@@ -116,6 +117,8 @@ int MQTTClient::Connect() {
 
 void MQTTClient::Disconnect() {
     if (IsConnected()) {
+        _isUserInitDisconnectOnGoing = true;
+        
         MQTTAsync_disconnectOptions disconnOpts = MQTTAsync_disconnectOptions_initializer;
         disconnOpts.context = this;
         disconnOpts.onSuccess = onDisconnectSuccess;
@@ -163,14 +166,6 @@ void MQTTClient::RemoveSubTopic(const std::string &subTopic) {
     }
 }
 
-const std::vector<std::string> &MQTTClient::GetPubTopics() const {
-    return _pubTopics;
-}
-
-const std::vector<std::string> &MQTTClient::GetSubTopics() const {
-    return _subTopics;
-}
-
 void MQTTClient::PubMessageForTopic(const std::string &topic, const std::string &message) {
     MQTTAsync_message pub = MQTTAsync_message_initializer;
     
@@ -202,6 +197,9 @@ void MQTTClient::PubMessageForTopic(const std::string &topic, const std::string 
 
 void MQTTClient::SubTopic(const std::string &topic) {
     if (find(_subTopics.begin(), _subTopics.end(), topic) != _subTopics.end()) {
+        if (this->onSubscribeTopicHandler != nullptr) {
+            this->onSubscribeTopicHandler(MQTTASYNC_COMMAND_IGNORED, topic);
+        }
         return;
     }
     
@@ -229,6 +227,9 @@ void MQTTClient::SubTopic(const std::string &topic) {
 
 void MQTTClient::UnsubTopic(const std::string &topic) {
     if (find(_subTopics.begin(), _subTopics.end(), topic) == _subTopics.end()) {
+        if (this->onUnsubscribeTopicHandler != nullptr) {
+            this->onUnsubscribeTopicHandler(MQTTASYNC_COMMAND_IGNORED, topic);
+        }
         return;
     }
     
@@ -254,6 +255,12 @@ void MQTTClient::UnsubTopic(const std::string &topic) {
     }
 }
 
+int MQTTClient::Reconnect() {
+    MQTTAsync client = static_cast<MQTTAsync>(_client);
+    MQTTAsync_reconnect(client);
+}
+
+#pragma mark - internal mqtt callbacks
 void onPubMessageSuccess(void* context, MQTTAsync_successData* response) {
     MQTTClient *self = static_cast<MQTTClient *>(context);
     
@@ -341,6 +348,7 @@ void onConnectFailure(void* context,  MQTTAsync_failureData* response) {
 }
 
 void onDisconnectSuccess(void* context, MQTTAsync_successData* response) {
+    _isUserInitDisconnectOnGoing = false;
     MQTTClient *self = static_cast<MQTTClient *>(context);
     if (self->onDisconnectHandler != nullptr) {
         self->onDisconnectHandler(0, self);
@@ -348,6 +356,7 @@ void onDisconnectSuccess(void* context, MQTTAsync_successData* response) {
 }
 
 void onDisconnectFailure(void* context,  MQTTAsync_failureData* response) {
+    _isUserInitDisconnectOnGoing = false;
     MQTTClient *self = static_cast<MQTTClient *>(context);
     if (self->onDisconnectHandler != nullptr) {
         self->onDisconnectHandler(response->code, self);
@@ -368,7 +377,7 @@ void onDeliveryCompleted(void *context, MQTTAsync_token dt) {
 
 void onConnectionLost(void* context, char* cause) {
     MQTTClient *self = static_cast<MQTTClient *>(context);
-    if (self->IsAutoReconnectEnabled()) {
+    if (self->IsAutoReconnectEnabled() && !_isUserInitDisconnectOnGoing) {
         self->Reconnect();
     }
     
@@ -377,9 +386,13 @@ void onConnectionLost(void* context, char* cause) {
     }
 }
 
-int MQTTClient::Reconnect() {
-    MQTTAsync client = static_cast<MQTTAsync>(_client);
-    MQTTAsync_reconnect(client);
+#pragma mark - getters/setters
+const std::vector<std::string> &MQTTClient::GetPubTopics() const {
+    return _pubTopics;
+}
+
+const std::vector<std::string> &MQTTClient::GetSubTopics() const {
+    return _subTopics;
 }
 
 bool MQTTClient::IsAutoReconnectEnabled() const {
