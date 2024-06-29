@@ -40,9 +40,12 @@ private:
     QLineEdit *edtPubTopic = nullptr;
     QPushButton *btnConnect = nullptr;
     QPushButton *btnDisconnect = nullptr;
+    QPushButton *btnPublish = nullptr;
+    QPushButton *btnSubscribe = nullptr;
     QLabel *lblStatus = nullptr;
     QListWidget *lwSubscribedTopics = nullptr;
     QListWidget *lwPublishedTopics = nullptr;
+    QListWidget *lwReceivedMessages = nullptr;
     
 private:
     Fang::MQTTClient *_client = nullptr;

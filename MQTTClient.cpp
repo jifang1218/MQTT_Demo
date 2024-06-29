@@ -63,7 +63,6 @@ MQTTClient::MQTTClient(const MQTTLoginInfo &login)
     _description = login.description;
     
     _isAutoReconnect = true;
-    _qos = 1;
     
     MQTTAsync_createOptions opts = MQTTAsync_createOptions_initializer;
     int errCode = -1;
@@ -166,12 +165,12 @@ void MQTTClient::RemoveSubTopic(const std::string &subTopic) {
     }
 }
 
-void MQTTClient::PubMessageForTopic(const std::string &topic, const std::string &message) {
+void MQTTClient::PubMessageForTopic(const std::string &topic, const std::string &message, int qos) {
     MQTTAsync_message pub = MQTTAsync_message_initializer;
     
     pub.payload = (void *)message.c_str();
     pub.payloadlen = (int)message.length();
-    pub.qos = _qos;
+    pub.qos = qos;
     
     MQTTAsync_responseOptions respOpts = MQTTAsync_responseOptions_initializer;
     respOpts.context = this;
@@ -195,7 +194,7 @@ void MQTTClient::PubMessageForTopic(const std::string &topic, const std::string 
     }
 }
 
-void MQTTClient::SubTopic(const std::string &topic) {
+void MQTTClient::SubTopic(const std::string &topic, int qos) {
     if (find(_subTopics.begin(), _subTopics.end(), topic) != _subTopics.end()) {
         if (this->onSubscribeTopicHandler != nullptr) {
             this->onSubscribeTopicHandler(MQTTASYNC_COMMAND_IGNORED, topic);
@@ -209,7 +208,7 @@ void MQTTClient::SubTopic(const std::string &topic) {
     respOpts.onSuccess = onSubTopicSuccess;
     
     if (IsConnected()) {
-        int errCode = MQTTAsync_subscribe(_client, topic.c_str(), _qos, &respOpts);
+        int errCode = MQTTAsync_subscribe(_client, topic.c_str(), qos, &respOpts);
         if (errCode != MQTTASYNC_SUCCESS) {
             if (this->onSubscribeTopicHandler != nullptr) {
                 this->onSubscribeTopicHandler(errCode, topic);
@@ -267,6 +266,8 @@ void onPubMessageSuccess(void* context, MQTTAsync_successData* response) {
     string topic = bufferedMsgs[response->token].topic;
     string message = bufferedMsgs[response->token].message;
     bufferedMsgs.erase(response->token);
+    
+    self->AddPubTopic(topic);
     
     if (self->onPublishMessageHandler != nullptr) {
         self->onPublishMessageHandler(0, topic, message);
@@ -409,10 +410,6 @@ std::string MQTTClient::GetServer() const {
 
 std::string MQTTClient::GetClientId() const {
     return _clientId;
-}
-
-int MQTTClient::GetQOS() const {
-    return _qos;
 }
 
 std::string MQTTClient::GetDescription() const {

@@ -61,8 +61,8 @@ public:
     void AddSubTopic(const std::string &subTopic);
     void RemoveSubTopic(const std::string &subTopic);
     
-    void PubMessageForTopic(const std::string &topic, const std::string &message);
-    void SubTopic(const std::string &topic);
+    void PubMessageForTopic(const std::string &topic, const std::string &message, int qos);
+    void SubTopic(const std::string &topic, int qos);
     void UnsubTopic(const std::string &topic);
     
     const std::vector<std::string> &GetPubTopics() const;
@@ -85,7 +85,6 @@ private:
     std::string _clientId;
     std::string _username;
     std::string _password;
-    int _qos = -1;
     bool _isAutoReconnect = false;
     
     std::vector<std::string> _pubTopics;

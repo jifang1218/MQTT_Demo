@@ -7,6 +7,7 @@
 
 #include "ClientWindow.hpp"
 #include "MQTTClient.hpp"
+#include <QMessageBox>
 #include <QGridLayout>
 #include <QLineEdit>
 #include <QCheckBox>
@@ -19,6 +20,7 @@
 #include <QList>
 #include <algorithm>
 #include <QDebug>
+#include <QDateTime>
 
 using namespace Fang;
 using namespace std;
@@ -125,6 +127,15 @@ QWidget *ClientWindow::construct0_1()
     gridLayout->addWidget(lwSubscribedTopics, 0, 0);
     QPushButton *button = new QPushButton("Unsubscribe");
     connect(button, &QPushButton::clicked, this, [this]()->void {
+        if (!_client->IsConnected()) {
+            QMessageBox msgBox;
+            msgBox.setWindowTitle("Cannot Process.");
+            msgBox.setText("Please connect to server first.");
+            msgBox.setIcon(QMessageBox::Information);
+            msgBox.setStandardButtons(QMessageBox::Ok);
+            msgBox.exec();
+            return;
+        }
         int row = lwSubscribedTopics->currentRow();
         if (row >= 0) {
             vector<string> topics = _client->GetSubTopics();
@@ -173,13 +184,31 @@ QWidget *ClientWindow::construct1_0()
     QLineEdit *lineEdit = new QLineEdit();
     lineEdit->setPlaceholderText("Topic");
     hLayout->addWidget(lineEdit);
+    label = new QLabel("QoS: ");
+    hLayout->addWidget(label);
+    QComboBox *cmbSubQos = new QComboBox();
+    cmbSubQos->addItem("0");
+    cmbSubQos->addItem("1");
+    cmbSubQos->addItem("2");
+    cmbSubQos->setCurrentIndex(1);
+    hLayout->addWidget(cmbSubQos);
     vLayout->addLayout(hLayout);
-    QPushButton *button = new QPushButton("Subscribe");
-    connect(button, &QPushButton::clicked, this, [lineEdit, this]()->void {
+    btnSubscribe = new QPushButton("Subscribe");
+    btnSubscribe->setEnabled(_client->IsConnected());
+    connect(btnSubscribe, &QPushButton::clicked, this, [cmbSubQos, lineEdit, this]()->void {
+        if (!_client->IsConnected()) {
+            QMessageBox msgBox;
+            msgBox.setWindowTitle("Cannot Process.");
+            msgBox.setText("Please connect to server first.");
+            msgBox.setIcon(QMessageBox::Information);
+            msgBox.setStandardButtons(QMessageBox::Ok);
+            msgBox.exec();
+            return;
+        }
         string topic = lineEdit->text().toStdString();
-        this->_client->SubTopic(topic);
+        this->_client->SubTopic(topic, cmbSubQos->currentIndex());
     });
-    vLayout->addWidget(button);
+    vLayout->addWidget(btnSubscribe);
     
     return groupBox;
 }
@@ -212,8 +241,24 @@ QWidget *ClientWindow::construct1_1()
     cmbQos->addItem("2");
     cmbQos->setCurrentIndex(1);
     hLayout->addWidget(cmbQos);
-    QPushButton *button = new QPushButton("Publish");
-    hLayout->addWidget(button);
+    btnPublish = new QPushButton("Publish");
+    btnPublish->setEnabled(_client->IsConnected());
+    connect(btnPublish, &QPushButton::clicked, this, [this, lineEdit, cmbQos]()->void {
+        if (!_client->IsConnected()) {
+            QMessageBox msgBox;
+            msgBox.setWindowTitle("Cannot Process.");
+            msgBox.setText("Please connect to server first.");
+            msgBox.setIcon(QMessageBox::Information);
+            msgBox.setStandardButtons(QMessageBox::Ok);
+            msgBox.exec();
+            return;
+        }
+        string topic = edtPubTopic->text().toStdString();
+        string message = lineEdit->text().toStdString();
+        int qos = cmbQos->currentIndex();
+        _client->PubMessageForTopic(topic, message, qos);
+    });
+    hLayout->addWidget(btnPublish);
     vLayout->addLayout(hLayout);
     
     return groupBox;
@@ -240,15 +285,8 @@ QLayout *ClientWindow::construct_rest()
     hLayout->addLayout(vLayout);
     
     vLayout = new QVBoxLayout();
-    QListWidget *listWidget = new QListWidget();
-#if TEST
-    listWidget->addItem("recv: topic:aaa, msg:bbb");
-    listWidget->addItem("recv: topic:aaa, msg:bbb");
-    listWidget->addItem("recv: topic:aaa, msg:bbb");
-    listWidget->addItem("recv: topic:aaa, msg:bbb");
-    listWidget->addItem("recv: topic:aaa, msg:bbb");
-#endif
-    vLayout->addWidget(listWidget);
+    lwReceivedMessages = new QListWidget();
+    vLayout->addWidget(lwReceivedMessages);
     lblStatus = new QLabel();
     if (_client->IsConnected()) {
         lblStatus->setText("Connected!");
@@ -345,9 +383,9 @@ void ClientWindow::onPublishMessageCompleted(int errCode, const std::string &top
         for (const string &topic : topics) {
             lwPublishedTopics->addItem(QString::fromStdString(topic));
         }
-        lblStatus->setText("Publish Topic: " + QString::fromStdString(topic) + "with message: " + QString::fromStdString(data) + " -- OK!");
+        lblStatus->setText("Publish Topic: " + QString::fromStdString(topic) + " with message: " + QString::fromStdString(data) + " -- OK!");
     } else {
-        lblStatus->setText("Publish Topic: " + QString::fromStdString(topic) + "with message: " + QString::fromStdString(data) + " -- Failed!");
+        lblStatus->setText("Publish Topic: " + QString::fromStdString(topic) + " with message: " + QString::fromStdString(data) + " -- Failed!");
     }
 }
 
@@ -389,6 +427,8 @@ void ClientWindow::onConnectCompleted(int errCode, const MQTTClient *self)
     this->btnConnect->setEnabled(!success);
     this->btnDisconnect->setEnabled(success);
     this->lblStatus->setText(success?"Connected!":"Connect Failure, errCode: " + QString::number(errCode));
+    btnSubscribe->setEnabled(success);
+    btnPublish->setEnabled(success);
 }
 
 void ClientWindow::onDisconnectCompleted(int errCode, const MQTTClient *self)
@@ -397,10 +437,16 @@ void ClientWindow::onDisconnectCompleted(int errCode, const MQTTClient *self)
     this->btnConnect->setEnabled(success);
     this->btnDisconnect->setEnabled(!success);
     this->lblStatus->setText(success?"Disconnected!":"Disconnect Failure, errCode: " + QString::number(errCode));
+    btnSubscribe->setEnabled(!success);
+    btnPublish->setEnabled(!success);
 }
 
 void ClientWindow::onMessageReceived(const std::string &topic, const std::string &message)
 {
+    QString str = "";
+    str += QDateTime::currentDateTime().toString("yyyy-MM-dd HH:mm:ss");
+    str += " | recv: topic: " + QString::fromStdString(topic) + " | message: " + QString::fromStdString(message);
+    lwReceivedMessages->insertItem(0, str);
 }
 
 
