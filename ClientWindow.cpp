@@ -32,6 +32,7 @@ ClientWindow::ClientWindow(const MQTTLoginInfo &loginInfo)
     setupCallbacks();
     
     construct();
+    /*
     QString title;
     if (_client->GetDisplayName().length()>0) {
         title += QString::fromStdString(_client->GetDisplayName());
@@ -42,11 +43,17 @@ ClientWindow::ClientWindow(const MQTTLoginInfo &loginInfo)
     title += QString::fromStdString(_client->GetClientId());
     title += ")";
     setWindowTitle(title);
+     */
 }
 
 ClientWindow::~ClientWindow()
 {
     delete _client;
+}
+
+void ClientWindow::closeEvent(QCloseEvent *event) {
+    emit widgetClosed(); // Emit close signal
+    QWidget::closeEvent(event);
 }
 
 void ClientWindow::setupCallbacks()
@@ -79,6 +86,7 @@ QWidget *ClientWindow::construct0_0()
     QGroupBox *groupBox = new QGroupBox("Info");
     QGridLayout *gridLayout = new QGridLayout();
     groupBox->setLayout(gridLayout);
+    // Server: ______
     QLabel *label = new QLabel("Server: ");
     gridLayout->addWidget(label, row, 0);
     QLineEdit *lineEdit = new QLineEdit();
@@ -86,6 +94,7 @@ QWidget *ClientWindow::construct0_0()
     lineEdit->setText(QString::fromStdString(_client->GetServer()));
     gridLayout->addWidget(lineEdit, row++, 1);
     
+    // Client ID: ______
     label = new QLabel("Client ID: ");
     gridLayout->addWidget(label, row, 0);
     lineEdit = new QLineEdit();
@@ -93,6 +102,7 @@ QWidget *ClientWindow::construct0_0()
     lineEdit->setText(QString::fromStdString(_client->GetClientId()));
     gridLayout->addWidget(lineEdit, row++, 1);
     
+    // Display Name: ______
     label = new QLabel("Display Name: ");
     gridLayout->addWidget(label, row, 0);
     lineEdit = new QLineEdit();
@@ -100,14 +110,16 @@ QWidget *ClientWindow::construct0_0()
     lineEdit->setReadOnly(true);
     gridLayout->addWidget(lineEdit, row++, 1);
     
+    // Description: ______
     QVBoxLayout *vLayout = new QVBoxLayout();
     label = new QLabel("Description");
     vLayout->addWidget(label);
     QTextEdit *textEdit = new QTextEdit();
     textEdit->setText(QString::fromStdString(_client->GetDescription()));
     textEdit->setReadOnly(true);
+    textEdit->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
     vLayout->addWidget(textEdit);
-    vLayout->addStretch();
+    //vLayout->addStretch();
     gridLayout->addLayout(vLayout, row, 0, 1, 2);
     
     return groupBox;
@@ -116,6 +128,8 @@ QWidget *ClientWindow::construct0_0()
 QWidget *ClientWindow::construct0_1()
 {
     QVBoxLayout *vLayout = new QVBoxLayout();
+    
+    // Subscribed Topics: ______
     QGroupBox *groupBox = new QGroupBox("Subscribed Topics");
     QGridLayout *gridLayout = new QGridLayout();
     lwSubscribedTopics = new QListWidget();
@@ -157,6 +171,7 @@ QWidget *ClientWindow::construct0_1()
     groupBox->setLayout(gridLayout);
     vLayout->addWidget(groupBox);
     
+    // Recent Published Topics: ______
     groupBox = new QGroupBox("Recent Published Topics");
     gridLayout = new QGridLayout();
     lwPublishedTopics = new QListWidget();
@@ -178,12 +193,16 @@ QWidget *ClientWindow::construct1_0()
     QGroupBox *groupBox = new QGroupBox("Subscribe");
     QVBoxLayout *vLayout = new QVBoxLayout();
     groupBox->setLayout(vLayout);
+    
+    // Topic: ______
     QHBoxLayout *hLayout = new QHBoxLayout();
     QLabel *label = new QLabel("Topic: ");
     hLayout->addWidget(label);
     QLineEdit *lineEdit = new QLineEdit();
     lineEdit->setPlaceholderText("Topic");
     hLayout->addWidget(lineEdit);
+    
+    // QoS: []
     label = new QLabel("QoS: ");
     hLayout->addWidget(label);
     QComboBox *cmbSubQos = new QComboBox();
@@ -218,6 +237,8 @@ QWidget *ClientWindow::construct1_1()
     QGroupBox *groupBox = new QGroupBox("Publish");
     QVBoxLayout *vLayout = new QVBoxLayout();
     groupBox->setLayout(vLayout);
+    
+    // Topic: ______
     QHBoxLayout *hLayout = new QHBoxLayout();
     QLabel *label = new QLabel("Topic: ");
     hLayout->addWidget(label);
@@ -226,12 +247,16 @@ QWidget *ClientWindow::construct1_1()
     hLayout->addWidget(edtPubTopic);
     vLayout->addLayout(hLayout);
     hLayout = new QHBoxLayout();
+    
+    // Message: ______
     label = new QLabel("Message: ");
     hLayout->addWidget(label);
     QLineEdit *lineEdit = new QLineEdit();
     lineEdit->setPlaceholderText("Message");
     hLayout->addWidget(lineEdit);
     vLayout->addLayout(hLayout);
+    
+    // QoS: []
     hLayout = new QHBoxLayout();
     label = new QLabel("QoS: ");
     hLayout->addWidget(label);
@@ -259,6 +284,7 @@ QWidget *ClientWindow::construct1_1()
         _client->PubMessageForTopic(topic, message, qos);
     });
     hLayout->addWidget(btnPublish);
+    hLayout->addStretch();
     vLayout->addLayout(hLayout);
     
     return groupBox;
@@ -268,6 +294,8 @@ QLayout *ClientWindow::construct_rest()
 {
     QHBoxLayout *hLayout = new QHBoxLayout();
     QVBoxLayout *vLayout = new QVBoxLayout();
+    
+    // buttons: Connect, Disconnect, Auto-Reconnect
     btnConnect = new QPushButton("Connect");
     btnConnect->setEnabled(!_client->IsConnected());
     connect(btnConnect, &QPushButton::clicked, this, &ClientWindow::onConnectButtonClicked);
@@ -282,16 +310,19 @@ QLayout *ClientWindow::construct_rest()
         this->_client->SetAutoReconnectEnabled(checkBox->isChecked());
     });
     vLayout->addWidget(checkBox);
+    vLayout->addStretch();
     hLayout->addLayout(vLayout);
     
     vLayout = new QVBoxLayout();
     lwReceivedMessages = new QListWidget();
     vLayout->addWidget(lwReceivedMessages);
+    
+    // Status: ______
     lblStatus = new QLabel();
     if (_client->IsConnected()) {
-        lblStatus->setText("Connected!");
+        lblStatus->setText("Status: Connected!");
     } else {
-        lblStatus->setText("Disconnected!");
+        lblStatus->setText("Status: Disconnected!");
     }
     vLayout->addWidget(lblStatus);
     hLayout->addLayout(vLayout);
@@ -383,9 +414,9 @@ void ClientWindow::onPublishMessageCompleted(int errCode, const std::string &top
         for (const string &topic : topics) {
             lwPublishedTopics->addItem(QString::fromStdString(topic));
         }
-        lblStatus->setText("Publish Topic: " + QString::fromStdString(topic) + " with message: " + QString::fromStdString(data) + " -- OK!");
+        lblStatus->setText("Status: Publish Topic: " + QString::fromStdString(topic) + " with message: " + QString::fromStdString(data) + " -- OK!");
     } else {
-        lblStatus->setText("Publish Topic: " + QString::fromStdString(topic) + " with message: " + QString::fromStdString(data) + " -- Failed!");
+        lblStatus->setText("Status: Publish Topic: " + QString::fromStdString(topic) + " with message: " + QString::fromStdString(data) + " -- Failed!");
     }
 }
 
@@ -399,9 +430,9 @@ void ClientWindow::onSubscribeTopicCompleted(int errCode, const std::string &top
         for (const string &topic : topics) {
             lwSubscribedTopics->addItem(QString::fromStdString(topic));
         }
-        lblStatus->setText("Subscribe Topic: " + QString::fromStdString(topic) + " -- OK!");
+        lblStatus->setText("Status: Subscribe Topic: " + QString::fromStdString(topic) + " -- OK!");
     } else {
-        lblStatus->setText("Subscribe Topic: " + QString::fromStdString(topic) + " -- Failed!");
+        lblStatus->setText("Status: Subscribe Topic: " + QString::fromStdString(topic) + " -- Failed!");
     }
 }
 
@@ -415,9 +446,9 @@ void ClientWindow::onUnsubscribeTopicCompleted(int errCode, const std::string &t
         for (const string &topic : topics) {
             lwSubscribedTopics->addItem(QString::fromStdString(topic));
         }
-        lblStatus->setText("Unsubscribe Topic: " + QString::fromStdString(topic) + " -- OK!");
+        lblStatus->setText("Status: Unsubscribe Topic: " + QString::fromStdString(topic) + " -- OK!");
     } else {
-        lblStatus->setText("Unsubscribe Topic: " + QString::fromStdString(topic) + " -- Failed!");
+        lblStatus->setText("Status: Unsubscribe Topic: " + QString::fromStdString(topic) + " -- Failed!");
     }
 }
 
@@ -426,7 +457,8 @@ void ClientWindow::onConnectCompleted(int errCode, const MQTTClient *self)
     bool success = errCode == 0;
     this->btnConnect->setEnabled(!success);
     this->btnDisconnect->setEnabled(success);
-    this->lblStatus->setText(success?"Connected!":"Connect Failure, errCode: " + QString::number(errCode));
+    QString str = (success?"Connected!":"Connect Failure, errCode: ");
+    this->lblStatus->setText("Status: " + str + QString::number(errCode));
     btnSubscribe->setEnabled(success);
     btnPublish->setEnabled(success);
 }
@@ -436,7 +468,8 @@ void ClientWindow::onDisconnectCompleted(int errCode, const MQTTClient *self)
     bool success = errCode == 0;
     this->btnConnect->setEnabled(success);
     this->btnDisconnect->setEnabled(!success);
-    this->lblStatus->setText(success?"Disconnected!":"Disconnect Failure, errCode: " + QString::number(errCode));
+    QString str = success?"Disconnected!":"Disconnect Failure, errCode: ";
+    this->lblStatus->setText("Status: " + str + QString::number(errCode));
     btnSubscribe->setEnabled(!success);
     btnPublish->setEnabled(!success);
 }
@@ -449,7 +482,8 @@ void ClientWindow::onMessageReceived(const std::string &topic, const std::string
     lwReceivedMessages->insertItem(0, str);
 }
 
-
+// the following methods are used for switching to UI thread by emitting signal jump2UISignal.
+// then the slot jump2UISlot will be running in UI thread. 
 void ClientWindow::_onPublishMessageCompleted(int errCode, const std::string &topic, const std::string &data)
 {
     emit jump2UISignal((int)CallbackType::Publish, errCode, QString::fromStdString(topic), QString::fromStdString(data), nullptr);

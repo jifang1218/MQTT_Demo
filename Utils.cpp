@@ -22,6 +22,9 @@ std::string Utils::generateString(int len) {
     }
     
     string text = "0123456789abcdefghijklmnopqrstuvwxyz";
+    while (text.length() < len) {
+        text += text;
+    }
     std::random_device rd;
     std::mt19937 g(rd());
     shuffle(text.begin(), text.end(), g);

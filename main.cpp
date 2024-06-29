@@ -67,7 +67,7 @@ int main(int argc, char *argv[])
     testjson();
     QApplication a(argc, argv);
     MainWindow w;
-    w.resize(800, 600);
+    w.resize(800, 350);
     w.show();
     return a.exec();
 }

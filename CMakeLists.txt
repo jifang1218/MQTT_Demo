@@ -60,9 +60,6 @@ else()
     endif()
 endif()
 
-message("jifang-------------------" ${QT_VERSION})
-message("jifang-------------------" ${QT_VERSION_MAJOR})
-
 # mqtt
 list(APPEND CMAKE_MODULE_PATH "/usr/local/lib/cmake/eclipse-paho-mqtt-c")
 include(eclipse-paho-mqtt-cConfig)

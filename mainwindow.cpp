@@ -28,10 +28,10 @@ MainWindow::MainWindow(QWidget *parent)
 }
 
 MainWindow::~MainWindow() {
-    for (auto &item : _clients) {
+    for (auto &item : _clientWindows) {
         delete item.second;
     }
-    _clients.clear();
+    _clientWindows.clear();
     
     delete pServerWindow;
 }
@@ -39,34 +39,32 @@ MainWindow::~MainWindow() {
 QWidget *MainWindow::createServerBox() {
     QGroupBox *groupBox = new QGroupBox("Server");
     
-    QGridLayout *gridLayout = new QGridLayout(groupBox);
-    QVBoxLayout *vLayout = new QVBoxLayout();
-    serverButtonGroup = new QButtonGroup(groupBox);
-    QRadioButton *radioButton = new QRadioButton("Start New Server");
-    serverButtonGroup->addButton(radioButton, 0);
-    radioButton->setChecked(false);
-    vLayout->addWidget(radioButton);
-    radioButton = new QRadioButton("Connect to Server");
-    serverButtonGroup->addButton(radioButton, 1);
-    radioButton->setChecked(true);
-    vLayout->addWidget(radioButton);
-    gridLayout->addLayout(vLayout, 0, 0);
-    
+    // Connect to Server: ______
+    QHBoxLayout *mainLayout = new QHBoxLayout();
+    QLabel *label = new QLabel("Connect to Server: ");
+    mainLayout->addWidget(label);
     edtConnectToServer = new QLineEdit(groupBox);
-    edtConnectToServer->setPlaceholderText("Server IP or address:");
-    gridLayout->addWidget(edtConnectToServer, 0, 1);
+    edtConnectToServer->setPlaceholderText("Server IP or address, Ex: localhost");
+    mainLayout->addWidget(edtConnectToServer);
     
+    // Port: ______
+    label = new QLabel("Port: ");
+    mainLayout->addWidget(label);
     edtConnectToServerPort = new QLineEdit();
+    // only accept integer.
     QIntValidator *intValidator = new QIntValidator();
     edtConnectToServerPort->setValidator(intValidator);
-    edtConnectToServerPort->setPlaceholderText("Port");
-    gridLayout->addWidget(edtConnectToServerPort, 0, 2);
-    connect(serverButtonGroup, &QButtonGroup::idToggled, this, &MainWindow::onServerCreationButtonToggled);
-    
+    edtConnectToServerPort->setPlaceholderText("Port, Ex:1883");
+    mainLayout->addWidget(edtConnectToServerPort);
+
+    // button Go!
     QPushButton *button = new QPushButton("Go!");
     connect(button, &QPushButton::clicked, this, &MainWindow::onGoButtonClicked);
-    gridLayout->addWidget(button, 2, 1);
-    groupBox->setLayout(gridLayout);
+    mainLayout->addWidget(button);
+    
+    mainLayout->addStretch();
+
+    groupBox->setLayout(mainLayout);
     
     return groupBox;
 }
@@ -74,66 +72,112 @@ QWidget *MainWindow::createServerBox() {
 QWidget *MainWindow::createClientBox() {
     QGroupBox *groupBox = new QGroupBox("Client");
     
-    // col 0
-    int row = 0, col = 0;
-    QGridLayout *gridLayout = new QGridLayout(groupBox);
+    QHBoxLayout *mainLayout = new QHBoxLayout();
+    
+    // column 0
+    QVBoxLayout *vLayout = new QVBoxLayout();
+    
+    // Server: ______
+    QHBoxLayout *hLayout = new QHBoxLayout();
+    QLabel *label = new QLabel("Server: ");
+    hLayout->addWidget(label);
     edtServer = new QLineEdit();
     edtServer->setPlaceholderText("Server IP or address");
-    gridLayout->addWidget(edtServer, row++, col);
+    hLayout->addWidget(edtServer);
+    vLayout->addLayout(hLayout);
     
+    // Port: ______
+    hLayout = new QHBoxLayout();
+    label = new QLabel("Port: ");
+    hLayout->addWidget(label);
+    edtPort = new QLineEdit();
+    // only accept integer.
+    QIntValidator *intValidator = new QIntValidator();
+    edtPort->setValidator(intValidator);
+    edtPort->setPlaceholderText("Port");
+    hLayout->addWidget(edtPort);
+    vLayout->addLayout(hLayout);
+    
+    // Client ID: ______
+    hLayout = new QHBoxLayout();
+    label = new QLabel("Client ID: ");
+    hLayout->addWidget(label);
     edtClientId = new QLineEdit();
     edtClientId->setPlaceholderText("Client ID");
-    gridLayout->addWidget(edtClientId, row++, col);
+    hLayout->addWidget(edtClientId);
+    vLayout->addLayout(hLayout);
     
-    QVBoxLayout *vLayout = new QVBoxLayout();
+    // Username: ______
+    hLayout = new QHBoxLayout();
+    label = new QLabel("Username: ");
+    hLayout->addWidget(label);
     edtUsername = new QLineEdit();
     edtUsername->setPlaceholderText("username");
-    vLayout->addWidget(edtUsername);
+    hLayout->addWidget(edtUsername);
+    vLayout->addLayout(hLayout);
     
+    // Password: ______
+    hLayout = new QHBoxLayout();
+    label = new QLabel("Password: ");
+    hLayout->addWidget(label);
     edtPasswd = new QLineEdit();
     edtPasswd->setEchoMode(QLineEdit::Password);
     edtPasswd->setPlaceholderText("password");
-    vLayout->addWidget(edtPasswd);
+    hLayout->addWidget(edtPasswd);
+    vLayout->addLayout(hLayout);
     
+    // []Anonymous Login
     cbAnonymousLogin = new QCheckBox("Anonymous Login");
     cbAnonymousLogin->setChecked(false);
     connect(cbAnonymousLogin, &QCheckBox::stateChanged, this, &MainWindow::onAnonymousLoginToggled);
     vLayout->addWidget(cbAnonymousLogin);
-    gridLayout->addLayout(vLayout, row++, col);
+    vLayout->addStretch();
     
-    // col 1
-    row = 0; ++col;
-    edtPort = new QLineEdit();
-    QIntValidator *intValidator = new QIntValidator();
-    edtPort->setValidator(intValidator);
-    edtPort->setPlaceholderText("Port");
-    gridLayout->addWidget(edtPort, row++, col);
+    mainLayout->addLayout(vLayout);
     
-    QPushButton *button = new QPushButton("Generate ID");
-    connect(button, &QPushButton::clicked, this, &MainWindow::onGenerateButtonClicked);
-    gridLayout->addWidget(button, row++, col);
+    // column 1
+    vLayout = new QVBoxLayout();
     
-#if TEST
-    button = new QPushButton("Dummy Client");
-    connect(button, &QPushButton::clicked, this, &MainWindow::onDummyClientButtonClicked);
-    gridLayout->addWidget(button, row++, col);
-#endif
-    
-    button = new QPushButton("Run Client");
-    connect(button, &QPushButton::clicked, this, &MainWindow::onRunClientButtonClicked);
-    gridLayout->addWidget(button, row++, col);
-    
-    // col 2
-    int rowspan = row - 1;
-    row = 0; ++col;
+    // Display Name: ______
+    hLayout = new QHBoxLayout();
+    label = new QLabel("Display Name: ");
+    hLayout->addWidget(label);
     edtDisplayName = new QLineEdit();
     edtDisplayName->setPlaceholderText("Display Name");
-    gridLayout->addWidget(edtDisplayName, row++, col);
+    hLayout->addWidget(edtDisplayName);
+    vLayout->addLayout(hLayout);
+    
+    // Client Description:
+    label = new QLabel("Client Description: ");
+    vLayout->addWidget(label);
     teDescription = new QTextEdit();
     teDescription->setPlaceholderText("Client Description");
-    gridLayout->addWidget(teDescription, row++, col, rowspan, 1);
+    teDescription->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
+    vLayout->addWidget(teDescription);
+    //vLayout->addStretch();
     
-    groupBox->setLayout(gridLayout);
+    mainLayout->addLayout(vLayout);
+    
+    // column 2
+    vLayout = new QVBoxLayout();
+    
+    // buttons: generate client id, dummy client, run client
+    QPushButton *button = new QPushButton("Generate Client ID");
+    connect(button, &QPushButton::clicked, this, &MainWindow::onGenerateButtonClicked);
+    vLayout->addWidget(button);
+#if TEST // please refer to add_definitions(-DTEST=1) in CMakeLists.txt
+    button = new QPushButton("Dummy Client");
+    connect(button, &QPushButton::clicked, this, &MainWindow::onDummyClientButtonClicked);
+    vLayout->addWidget(button);
+#endif
+    button = new QPushButton("Run Client");
+    connect(button, &QPushButton::clicked, this, &MainWindow::onRunClientButtonClicked);
+    vLayout->addWidget(button);
+    vLayout->addStretch();
+    
+    mainLayout->addLayout(vLayout);
+    
+    groupBox->setLayout(mainLayout);
     
     return groupBox;
 }
@@ -149,22 +193,34 @@ void MainWindow::construct() {
     
     // client
     QGroupBox *gbClient = static_cast<QGroupBox *>(createClientBox());
+    gbClient->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
     mainLayout->addWidget(gbClient);
 
+    central->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
     this->setCentralWidget(central);
 }
 
 void MainWindow::onGoButtonClicked()
 {
     qDebug() << "go button clicked." << Qt::endl;
-    qDebug() << serverButtonGroup->checkedId() << Qt::endl;
+}
+
+bool MainWindow::isClientIdExist(const std::string &clientId) const {
+    bool ret = false;
+    
+    if (_clientWindows.find(clientId) != _clientWindows.end()) {
+        ret = true;
+    }
+    
+    return ret;
+    
 }
 
 void MainWindow::onGenerateButtonClicked()
 {
     const int len = 50;
     string clientId = Utils::generateString(len);
-    while(_clients.find(clientId) != _clients.end()) {
+    while(isClientIdExist(clientId)) {
         clientId = Utils::generateString(len);
     }
     
@@ -173,13 +229,15 @@ void MainWindow::onGenerateButtonClicked()
 
 void MainWindow::onRunClientButtonClicked()
 {
+    // validate / collect login info
     if (validateClientInput()) {
+        // Ex.: tcp://localhost:1883
         string server = "tcp://"
                         + edtServer->text().toStdString()
                         + ":"
                         + edtPort->text().toStdString();
         string clientId = edtClientId->text().toStdString();
-        if (_clients.find(clientId) != _clients.end()) {
+        if (isClientIdExist(clientId)) {
             QMessageBox msgBox;
             msgBox.setWindowTitle("Cannot create client.");
             msgBox.setText("Client ID already exists, please use a new client ID.");
@@ -203,32 +261,27 @@ void MainWindow::onRunClientButtonClicked()
         login.displayName = edtDisplayName->text().toStdString();
         login.description = teDescription->toPlainText().toStdString();
         
+        // create a new client.
         ClientWindow *pClient = new ClientWindow(login);
-        _clients[clientId] = pClient;
+        // we defined a customized signal (widgetClosed), to indicate if the user
+        // close the client panel.
+        // the client instance and client id will be destroyed after the user closed the client panel.
+        connect(pClient, &ClientWindow::widgetClosed, this, [clientId, this]()->void {
+            ClientWindow *client = _clientWindows[clientId];
+            delete client;
+            _clientWindows.erase(clientId);
+        });
+        // save the client id/instance pair.
+        _clientWindows[clientId] = pClient;
         pClient->resize(800, 450);
         pClient->show();
-    }
-}
-
-void MainWindow::onServerCreationButtonToggled(int id, bool checked)
-{
-    if (checked) {
-        switch (id) {
-            case 0: { // start new server
-                edtConnectToServer->setText("localhost");
-                edtConnectToServer->setEnabled(false);
-                edtConnectToServerPort->setText("1883");
-                edtConnectToServerPort->setEnabled(false);
-            } break;
-            case 1: { // connect to
-                edtConnectToServer->setText("");
-                edtConnectToServer->setEnabled(true);
-                edtConnectToServerPort->setText("");
-                edtConnectToServerPort->setEnabled(true);
-            } break;
-            default: {
-            } break;
-        }
+    } else { // insufficient login info.
+        QMessageBox msgBox;
+        msgBox.setWindowTitle("Cannot create client.");
+        msgBox.setText("Make sure Server, Port, Client ID, and Username are valid.");
+        msgBox.setIcon(QMessageBox::Information);
+        msgBox.setStandardButtons(QMessageBox::Ok);
+        msgBox.exec();
     }
 }
 
@@ -259,7 +312,7 @@ bool MainWindow::validateClientInput() {
     return ret;
 }
 
-#if TEST
+#if TEST // please refer to add_definitions(-DTEST=1) in CMakeLists.txt
 void MainWindow::onDummyClientButtonClicked()
 {
     edtServer->setText("localhost");

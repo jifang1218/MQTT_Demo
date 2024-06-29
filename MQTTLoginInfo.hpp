@@ -12,6 +12,9 @@
 
 namespace Fang {
 
+/**
+ Client Login Info
+ */
 struct MQTTLoginInfo {
     std::string host;
     std::string clientId;

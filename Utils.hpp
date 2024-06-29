@@ -11,9 +11,15 @@
 #include <string>
 
 namespace Fang {
-    
+
+/**
+    Utility class
+ */
 class Utils {
 public:
+    /**
+    Randomly generate a specific length of string. (0-9 and a-z)
+     */
     static std::string generateString(int len);
 };
 

@@ -11,12 +11,13 @@
 #include <algorithm>
 #include <iostream>
 #include <unordered_map>
+#include <QDebug>
 
 namespace Fang {
 
 using namespace std;
 
-
+// callback functions used by Paho-MQTT-C
 //PubMessageCallback onPublishMessageHandler;
 static void onPubMessageSuccess(void* context, MQTTAsync_successData* response);
 static void onPubMessageFailure(void* context, MQTTAsync_failureData* response);
@@ -40,18 +41,19 @@ static void onDisconnectFailure(void* context,  MQTTAsync_failureData* response)
 //MessageReceivedCallback onMessageReceivedHandler;
 static int onMessageArrived(void *context, char *topicName, int topicLen, MQTTAsync_message *message);
 
-static bool _isUserInitDisconnectOnGoing = false;
-
-
 static void onDeliveryCompleted(void *context, MQTTAsync_token dt);
 static void onConnectionLost(void* context, char* cause);
 
+// temporarily stored sending topics/messages
+// used by subscribe/unsubscribe, publish actions.
 struct Msg {
-    string topic;
-    string message;
+    std::string topic;
+    std::string message;
 };
+static std::unordered_map<MQTTAsync_token, Msg> bufferedMsgs;
 
-static unordered_map<MQTTAsync_token, Msg> bufferedMsgs;
+// indicate if the disconnect action is trigger by user or not.
+bool _isUserInitDisconnectOnGoing = false;
 
 MQTTClient::MQTTClient(const MQTTLoginInfo &login)
 {
@@ -62,16 +64,16 @@ MQTTClient::MQTTClient(const MQTTLoginInfo &login)
     _displayName = login.displayName;
     _description = login.description;
     
-    _isAutoReconnect = true;
+    _isAutoReconnect = false;
     
     MQTTAsync_createOptions opts = MQTTAsync_createOptions_initializer;
     int errCode = -1;
-    // if you want MQTTCLIENT_PERSISTENCE_DEFAULT, you need to set directory first.
+    // if you want MQTTCLIENT_PERSISTENCE_DEFAULT, you need to set a valid directory first.
     //const char* persistenceDir = "~/.mqttclient";
     //errCode = MQTTAsync_createWithOptions(&_client, _server.c_str(), _clientId.c_str(), MQTTCLIENT_PERSISTENCE_DEFAULT, (void*)persistenceDir, &opts);
     errCode = MQTTAsync_createWithOptions(&_client, _server.c_str(), _clientId.c_str(), MQTTCLIENT_PERSISTENCE_NONE, NULL, &opts);
     if (errCode != MQTTASYNC_SUCCESS) {
-        cout << "failed to create client, errcode: " << errCode << endl;
+        qDebug() << "failed to create client, errcode: " << errCode << Qt::endl;
     }
 }
 
@@ -85,39 +87,56 @@ MQTTClient::~MQTTClient()
 
 #pragma mark - Actions
 int MQTTClient::Connect() {
-    MQTTAsync_connectOptions conn_opts = MQTTAsync_connectOptions_initializer;
-    //    conn_opts.keepAliveInterval = 20;
-    //    conn_opts.cleansession = 1;
-    conn_opts.context = this;
-    conn_opts.username = _username.c_str();
-    conn_opts.password = _password.c_str();
-    conn_opts.onSuccess = onConnectSuccess;
-    conn_opts.onFailure = onConnectFailure;
+    int ret = -1;
     
-    int errCode = -1;
-    errCode = MQTTAsync_setCallbacks(_client, this, onConnectionLost, onMessageArrived, onDeliveryCompleted);
-    if (errCode != MQTTASYNC_SUCCESS) {
-        if (this->onConnectHandler != nullptr) {
-            this->onConnectHandler(errCode, this);
+    do {
+        if (IsConnected()) {
+            if (this->onConnectHandler != nullptr) {
+                this->onConnectHandler(MQTTASYNC_COMMAND_IGNORED, this);
+            }
+            break;
         }
-        return -1;
-    }
-    
-    errCode = MQTTAsync_connect(_client, &conn_opts);
-    if (errCode != MQTTASYNC_SUCCESS) {
-        if (this->onConnectHandler != nullptr) {
-            this->onConnectHandler(errCode, this);
+        
+        MQTTAsync_connectOptions conn_opts = MQTTAsync_connectOptions_initializer;
+        //    conn_opts.keepAliveInterval = 20;
+        //    conn_opts.cleansession = 1;
+        conn_opts.context = this;
+        conn_opts.username = _username.c_str();
+        conn_opts.password = _password.c_str();
+        conn_opts.onSuccess = onConnectSuccess;
+        conn_opts.onFailure = onConnectFailure;
+        int errCode = -1;
+        errCode = MQTTAsync_setCallbacks(_client, this, onConnectionLost, onMessageArrived, onDeliveryCompleted);
+        if (errCode != MQTTASYNC_SUCCESS) {
+            if (this->onConnectHandler != nullptr) {
+                this->onConnectHandler(errCode, this);
+            }
+            break;
         }
-        return -1;
-    }
+            
+        errCode = MQTTAsync_connect(_client, &conn_opts);
+        if (errCode != MQTTASYNC_SUCCESS) {
+            if (this->onConnectHandler != nullptr) {
+                this->onConnectHandler(errCode, this);
+            }
+            break;
+        }
+        ret = 0;
+    } while (0);
     
-    return 0;
+    return ret;
 }
 
 void MQTTClient::Disconnect() {
-    if (IsConnected()) {
-        _isUserInitDisconnectOnGoing = true;
+    do {
+        if (!IsConnected()) {
+            if (this->onDisconnectHandler != nullptr) {
+                this->onDisconnectHandler(MQTTASYNC_COMMAND_IGNORED, this);
+            }
+            break;
+        }
         
+        _isUserInitDisconnectOnGoing = true;
         MQTTAsync_disconnectOptions disconnOpts = MQTTAsync_disconnectOptions_initializer;
         disconnOpts.context = this;
         disconnOpts.onSuccess = onDisconnectSuccess;
@@ -129,8 +148,9 @@ void MQTTClient::Disconnect() {
             if (this->onDisconnectHandler != nullptr) {
                 this->onDisconnectHandler(errCode, this);
             }
+            break;
         }
-    }
+    } while (0);
 }
 
 bool MQTTClient::IsConnected() const {
@@ -166,100 +186,109 @@ void MQTTClient::RemoveSubTopic(const std::string &subTopic) {
 }
 
 void MQTTClient::PubMessageForTopic(const std::string &topic, const std::string &message, int qos) {
-    MQTTAsync_message pub = MQTTAsync_message_initializer;
+    do {
+        if (!IsConnected()) {
+            if (this->onPublishMessageHandler != nullptr) {
+                this->onPublishMessageHandler(MQTTASYNC_DISCONNECTED, topic, message);
+            }
+            break;
+        }
     
-    pub.payload = (void *)message.c_str();
-    pub.payloadlen = (int)message.length();
-    pub.qos = qos;
-    
-    MQTTAsync_responseOptions respOpts = MQTTAsync_responseOptions_initializer;
-    respOpts.context = this;
-    respOpts.onFailure = onPubMessageFailure;
-    respOpts.onSuccess = onPubMessageSuccess;
-    
-    if (IsConnected()) {
+        MQTTAsync_message pub = MQTTAsync_message_initializer;
+        pub.payload = (void *)message.c_str();
+        pub.payloadlen = (int)message.length();
+        pub.qos = qos;
+        MQTTAsync_responseOptions respOpts = MQTTAsync_responseOptions_initializer;
+        respOpts.context = this;
+        respOpts.onFailure = onPubMessageFailure;
+        respOpts.onSuccess = onPubMessageSuccess;
         int errCode = MQTTAsync_sendMessage(_client, topic.c_str(), &pub, &respOpts);
         if (errCode != MQTTASYNC_SUCCESS) {
             if (this->onPublishMessageHandler != nullptr) {
                 this->onPublishMessageHandler(errCode, topic, message);
             }
-        } else {
-            Msg msg = {topic, message};
-            bufferedMsgs[respOpts.token] = msg;
+            break;
         }
-    } else {
-        if (this->onPublishMessageHandler != nullptr) {
-            this->onPublishMessageHandler(MQTTASYNC_DISCONNECTED, topic, message);
-        }
-    }
+     
+        // buffer message, will handle it in Publish callback function. 
+        Msg msg = {topic, message};
+        bufferedMsgs[respOpts.token] = msg;
+    } while (0);
 }
 
 void MQTTClient::SubTopic(const std::string &topic, int qos) {
-    if (find(_subTopics.begin(), _subTopics.end(), topic) != _subTopics.end()) {
-        if (this->onSubscribeTopicHandler != nullptr) {
-            this->onSubscribeTopicHandler(MQTTASYNC_COMMAND_IGNORED, topic);
+    do {
+        if (find(_subTopics.begin(), _subTopics.end(), topic) != _subTopics.end()) {
+            if (this->onSubscribeTopicHandler != nullptr) {
+                this->onSubscribeTopicHandler(MQTTASYNC_COMMAND_IGNORED, topic);
+            }
+            break;
         }
-        return;
-    }
-    
-    MQTTAsync_responseOptions respOpts = MQTTAsync_responseOptions_initializer;
-    respOpts.context = this;
-    respOpts.onFailure = onSubTopicFailure;
-    respOpts.onSuccess = onSubTopicSuccess;
-    
-    if (IsConnected()) {
+        
+        if (!IsConnected()) {
+            if (this->onSubscribeTopicHandler != nullptr) {
+                this->onSubscribeTopicHandler(MQTTASYNC_DISCONNECTED, topic);
+            }
+            break;
+        }
+        MQTTAsync_responseOptions respOpts = MQTTAsync_responseOptions_initializer;
+        respOpts.context = this;
+        respOpts.onFailure = onSubTopicFailure;
+        respOpts.onSuccess = onSubTopicSuccess;
         int errCode = MQTTAsync_subscribe(_client, topic.c_str(), qos, &respOpts);
+        
         if (errCode != MQTTASYNC_SUCCESS) {
             if (this->onSubscribeTopicHandler != nullptr) {
                 this->onSubscribeTopicHandler(errCode, topic);
             }
-        } else {
-            Msg msg = {topic, ""};
-            bufferedMsgs[respOpts.token] = msg;
+            break;
         }
-    }else {
-        if (this->onSubscribeTopicHandler != nullptr) {
-            this->onSubscribeTopicHandler(MQTTASYNC_DISCONNECTED, topic);
-        }
-    }
+        
+        // buffer message, will handle it in subscribe callback function.
+        Msg msg = {topic, ""};
+        bufferedMsgs[respOpts.token] = msg;
+    } while (0);
 }
 
 void MQTTClient::UnsubTopic(const std::string &topic) {
-    if (find(_subTopics.begin(), _subTopics.end(), topic) == _subTopics.end()) {
-        if (this->onUnsubscribeTopicHandler != nullptr) {
-            this->onUnsubscribeTopicHandler(MQTTASYNC_COMMAND_IGNORED, topic);
+    do {
+        if (find(_subTopics.begin(), _subTopics.end(), topic) == _subTopics.end()) {
+            if (this->onUnsubscribeTopicHandler != nullptr) {
+                this->onUnsubscribeTopicHandler(MQTTASYNC_COMMAND_IGNORED, topic);
+            }
+            break;
         }
-        return;
-    }
-    
-    MQTTAsync_responseOptions respOpts = MQTTAsync_responseOptions_initializer;
-    respOpts.context = this;
-    respOpts.onFailure = onUnsubTopicFailure;
-    respOpts.onSuccess = onUnsubTopicSuccess;
-    
-    if (IsConnected()) {
+        
+        if (!IsConnected()) {
+            if (this->onUnsubscribeTopicHandler != nullptr) {
+                this->onUnsubscribeTopicHandler(MQTTASYNC_DISCONNECTED, topic);
+            }
+            break;
+        }
+        
+        MQTTAsync_responseOptions respOpts = MQTTAsync_responseOptions_initializer;
+        respOpts.context = this;
+        respOpts.onFailure = onUnsubTopicFailure;
+        respOpts.onSuccess = onUnsubTopicSuccess;
         int errCode = MQTTAsync_unsubscribe(_client, topic.c_str(), &respOpts);
         if (errCode != MQTTASYNC_SUCCESS) {
             if (this->onUnsubscribeTopicHandler != nullptr) {
                 this->onUnsubscribeTopicHandler(errCode, topic);
             }
-        } else {
-            Msg msg = {topic, ""};
-            bufferedMsgs[respOpts.token] = msg;
+            break;
         }
-    }else {
-        if (this->onUnsubscribeTopicHandler != nullptr) {
-            this->onUnsubscribeTopicHandler(MQTTASYNC_DISCONNECTED, topic);
-        }
-    }
+        
+        // buffer message, will handle it in unsubscribe callback function.
+        Msg msg = {topic, ""};
+        bufferedMsgs[respOpts.token] = msg;
+    } while (0);
 }
 
 int MQTTClient::Reconnect() {
-    MQTTAsync client = static_cast<MQTTAsync>(_client);
-    MQTTAsync_reconnect(client);
+    MQTTAsync_reconnect(static_cast<MQTTAsync>(_client));
 }
 
-#pragma mark - internal mqtt callbacks
+#pragma mark - internal Paho-MQTT-C callbacks
 void onPubMessageSuccess(void* context, MQTTAsync_successData* response) {
     MQTTClient *self = static_cast<MQTTClient *>(context);
     
@@ -378,7 +407,8 @@ void onDeliveryCompleted(void *context, MQTTAsync_token dt) {
 
 void onConnectionLost(void* context, char* cause) {
     MQTTClient *self = static_cast<MQTTClient *>(context);
-    if (self->IsAutoReconnectEnabled() && !_isUserInitDisconnectOnGoing) {
+    if (self->IsAutoReconnectEnabled()
+        && !_isUserInitDisconnectOnGoing) {
         self->Reconnect();
     }
     
