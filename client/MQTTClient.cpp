@@ -297,7 +297,8 @@ void onPubMessageSuccess(void* context, MQTTAsync_successData* response) {
     string message = bufferedMsgs[response->token].message;
     bufferedMsgs.erase(response->token);
     
-    MQTTAsync_free(response);
+    // mqtt lib is responsible for deallocating response object.
+    //MQTTAsync_free(response);
     
     self->AddPubTopic(topic);
     
@@ -313,7 +314,8 @@ void onPubMessageFailure(void* context, MQTTAsync_failureData* response) {
     string message = bufferedMsgs[response->token].message;
     bufferedMsgs.erase(response->token);
     
-    MQTTAsync_free(response);
+    // mqtt lib is responsible for deallocating response object.
+    //MQTTAsync_free(response);
     
     if (self->onPublishMessageHandler != nullptr) {
         self->onPublishMessageHandler(response->code, topic, message);
@@ -326,7 +328,8 @@ void onSubTopicSuccess(void* context, MQTTAsync_successData* response) {
     string topic = bufferedMsgs[response->token].topic;
     bufferedMsgs.erase(response->token);
     
-    MQTTAsync_free(response);
+    // mqtt lib is responsible for deallocating response object.
+    //MQTTAsync_free(response);
     
     self->AddSubTopic(topic);
     
@@ -341,7 +344,8 @@ void onSubTopicFailure(void* context, MQTTAsync_failureData* response) {
     string topic = bufferedMsgs[response->token].topic;
     bufferedMsgs.erase(response->token);
     
-    MQTTAsync_free(response);
+    // mqtt lib is responsible for deallocating response object.
+    //MQTTAsync_free(response);
     
     if (self->onSubscribeTopicHandler != nullptr) {
         self->onSubscribeTopicHandler(response->code, topic);
@@ -354,7 +358,8 @@ void onUnsubTopicSuccess(void* context, MQTTAsync_successData* response) {
     string topic = bufferedMsgs[response->token].topic;
     bufferedMsgs.erase(response->token);
     
-    MQTTAsync_free(response);
+    // mqtt lib is responsible for deallocating response object.
+    //MQTTAsync_free(response);
     
     self->RemoveSubTopic(topic);
     
@@ -369,7 +374,8 @@ void onUnsubTopicFailure(void* context, MQTTAsync_failureData* response) {
     string topic = bufferedMsgs[response->token].topic;
     bufferedMsgs.erase(response->token);
     
-    MQTTAsync_free(response);
+    // mqtt lib is responsible for deallocating response object.
+    //MQTTAsync_free(response);
     
     if (self->onUnsubscribeTopicHandler != nullptr) {
         self->onUnsubscribeTopicHandler(response->code, topic);
@@ -377,7 +383,8 @@ void onUnsubTopicFailure(void* context, MQTTAsync_failureData* response) {
 }
 
 void onConnectSuccess(void* context, MQTTAsync_successData* response) {
-    MQTTAsync_free(response);
+    // mqtt lib is responsible for deallocating response object.
+    //MQTTAsync_free(response);
     
     MQTTClient *self = static_cast<MQTTClient *>(context);
     if (self->onConnectHandler != nullptr) {
@@ -387,7 +394,9 @@ void onConnectSuccess(void* context, MQTTAsync_successData* response) {
 
 void onConnectFailure(void* context,  MQTTAsync_failureData* response) {
     int code = response->code;
-    MQTTAsync_free(response);
+    
+    // mqtt lib is responsible for deallocating response object.
+    //MQTTAsync_free(response);
     
     MQTTClient *self = static_cast<MQTTClient *>(context);
     if (self->onConnectHandler != nullptr) {
@@ -396,7 +405,8 @@ void onConnectFailure(void* context,  MQTTAsync_failureData* response) {
 }
 
 void onDisconnectSuccess(void* context, MQTTAsync_successData* response) {
-    MQTTAsync_free(response);
+    // mqtt lib is responsible for deallocating response object.
+    //MQTTAsync_free(response);
     
     _isUserInitDisconnectOnGoing = false;
     MQTTClient *self = static_cast<MQTTClient *>(context);
@@ -407,7 +417,9 @@ void onDisconnectSuccess(void* context, MQTTAsync_successData* response) {
 
 void onDisconnectFailure(void* context,  MQTTAsync_failureData* response) {
     int code = response->code;
-    MQTTAsync_free(response);
+    
+    // mqtt lib is responsible for deallocating response object.
+    //MQTTAsync_free(response);
     
     _isUserInitDisconnectOnGoing = false;
     MQTTClient *self = static_cast<MQTTClient *>(context);
@@ -415,26 +427,55 @@ void onDisconnectFailure(void* context,  MQTTAsync_failureData* response) {
         self->onDisconnectHandler(response->code, self);
     }
 }
-
+/**
+ * @param topicName The topic associated with the received message.
+ * @param topicLen The length of the topic if there are one
+ * more NULL characters embedded in <i>topicName</i>, otherwise <i>topicLen</i>
+ * is 0. If <i>topicLen</i> is 0, the value returned by <i>strlen(topicName)</i>
+ * can be trusted. If <i>topicLen</i> is greater than 0, the full topic name
+ * can be retrieved by accessing <i>topicName</i> as a byte array of length
+ * <i>topicLen</i>.
+ *
+ * @return This function must return 0 or 1 indicating whether or not
+ * the message has been safely received by the client application. <br>
+ * Returning 1 indicates that the message has been successfully handled.
+ * To free the message storage, ::MQTTAsync_freeMessage must be called.
+ * To free the topic name storage, ::MQTTAsync_free must be called.<br>
+ * Returning 0 indicates that there was a problem. In this
+ * case, the client library will reinvoke MQTTAsync_messageArrived() to
+ * attempt to deliver the message to the application again.
+ * Do not free the message and topic storage when returning 0, otherwise
+ * the redelivery will fail.
+ */
 int onMessageArrived(void *context, char *topicName, int topicLen, MQTTAsync_message *message) {
-    string topic(topicName, topicLen);
+    
+    string topic;
+    if (topicLen != 0) {
+        topic = topicName;
+    } else {
+        topic = string(topicName, topicLen);
+    }
     string msg(static_cast<const char *>(message->payload), message->payloadlen);
     
     MQTTAsync_free(topicName);
-    MQTTAsync_free(message);
+    MQTTAsync_freeMessage(&message);
     
     MQTTClient *self = static_cast<MQTTClient *>(context);
     if (self->onMessageReceivedHandler != nullptr) {
         self->onMessageReceivedHandler(topic, msg);
     }
     
-    return 0;
+    // 1 means this message has been successfully handled.
+    // 0 means failed to handled and lib will re-invoke this callback (redelivery).
+    // don't MQTTAsync_freeMessage(&message); if return 0. 
+    return 1;
 }
 
 void onDeliveryCompleted(void *context, MQTTAsync_token dt) {
 }
 
 void onConnectionLost(void* context, char* cause) {
+    // according to the current implementation, mqtt lib always return NULL for cause.
     MQTTAsync_free(cause);
     
     MQTTClient *self = static_cast<MQTTClient *>(context);
